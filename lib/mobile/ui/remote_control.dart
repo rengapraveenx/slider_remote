@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:web_socket_channel/status.dart' as status;
@@ -21,6 +22,13 @@ class _RemoteControlState extends State<RemoteControl> {
   void initState() {
     super.initState();
     WakelockPlus.enable();
+    // Ensure all orientations are allowed
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
   }
 
   @override
@@ -30,13 +38,42 @@ class _RemoteControlState extends State<RemoteControl> {
     super.dispose();
   }
 
+  bool _isValidIp(String ip) {
+    if (ip.isEmpty) return false;
+    // Basic IPv4 format check: x.x.x.x where x is 0-255
+    final regex = RegExp(
+      r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$',
+    );
+    return regex.hasMatch(ip);
+  }
+
   void _connect() {
     final ip = _ipController.text.trim();
-    if (ip.isEmpty) return;
+    if (ip.isEmpty) {
+      setState(() {
+        _statusMessage = "Please enter an IP address";
+      });
+      return;
+    }
+
+    if (!_isValidIp(ip)) {
+      setState(() {
+        _statusMessage = "Invalid IP address format";
+      });
+      return;
+    }
+
     _connectToIp(ip);
   }
 
   void _connectToIp(String ip) {
+    if (!_isValidIp(ip)) {
+      setState(() {
+        _statusMessage = "Invalid QR Code format";
+      });
+      return;
+    }
+
     try {
       final wsUrl = Uri.parse('ws://$ip:8080');
       setState(() {
@@ -96,6 +133,17 @@ class _RemoteControlState extends State<RemoteControl> {
     }
   }
 
+  void _showFeedback(BuildContext context, String text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text, textAlign: TextAlign.center),
+        duration: const Duration(milliseconds: 300),
+        behavior: SnackBarBehavior.floating,
+        width: 100,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_isConnected) {
@@ -150,77 +198,77 @@ class _RemoteControlState extends State<RemoteControl> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: GestureDetector(
-        onHorizontalDragEnd: (details) {
-          if (details.primaryVelocity! > 0) {
-            // Swipe Right -> Previous
-            _sendCommand("prev");
-            _showFeedback(context, "Previous");
-          } else if (details.primaryVelocity! < 0) {
-            // Swipe Left -> Next
-            _sendCommand("next");
-            _showFeedback(context, "Next");
-          }
-        },
-        child: Container(
-          color: Colors.transparent, // Hit test needs color
-          child: Stack(
-            children: [
-              Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.touch_app,
-                      color: Colors.white24,
-                      size: 100,
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      "Swipe Left for NEXT\nSwipe Right for PREV",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        _channel?.sink.close(status.normalClosure);
+        setState(() {
+          _isConnected = false;
+        });
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: GestureDetector(
+          onHorizontalDragEnd: (details) {
+            if (details.primaryVelocity! > 0) {
+              // Swipe Right -> Previous
+              _sendCommand("prev");
+              _showFeedback(context, "Previous");
+            } else if (details.primaryVelocity! < 0) {
+              // Swipe Left -> Next
+              _sendCommand("next");
+              _showFeedback(context, "Next");
+            }
+          },
+          onVerticalDragEnd: (details) {
+            if (details.primaryVelocity! > 0) {
+              // Swipe Down -> Previous
+              _sendCommand("prev");
+              _showFeedback(context, "Previous");
+            } else if (details.primaryVelocity! < 0) {
+              // Swipe Up -> Next
+              _sendCommand("next");
+              _showFeedback(context, "Next");
+            }
+          },
+          child: Container(
+            color: Colors.transparent, // Hit test needs color
+            child: Stack(
+              children: [
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.touch_app,
+                        color: Colors.white24,
+                        size: 100,
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              Positioned(
-                bottom: 40,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: TextButton(
-                    onPressed: () {
-                      _channel?.sink.close(status.normalClosure);
-                      setState(() {
-                        _isConnected = false;
-                      });
-                    },
-                    child: const Text(
-                      "Disconnect",
-                      style: TextStyle(color: Colors.red),
-                    ),
+                      const SizedBox(height: 20),
+                      Text(
+                        "Swipe LEFT or UP for NEXT\nSwipe RIGHT or DOWN for PREV",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        "(Back to Disconnect)",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.3),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
-    );
-  }
-
-  void _showFeedback(BuildContext context, String text) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(text, textAlign: TextAlign.center),
-        duration: const Duration(milliseconds: 300),
-        behavior: SnackBarBehavior.floating,
-        width: 100,
       ),
     );
   }
