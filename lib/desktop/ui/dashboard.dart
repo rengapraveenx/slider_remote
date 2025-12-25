@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pdfrx/pdfrx.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../server/server.dart';
 
@@ -187,6 +188,27 @@ class _DashboardState extends State<Dashboard> {
                       const Divider(height: 32),
                       _buildStatusRow('IP Address', _serverIp ?? 'Loading...'),
                       _buildStatusRow('Connected Devices', '$_clientCount'),
+                      if (_serverIp != null) ...[
+                        const SizedBox(height: 24),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: QrImageView(
+                            data: _serverIp!,
+                            version: QrVersions.auto,
+                            size: 150.0,
+                            backgroundColor: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Scan to Connect',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
                     ],
                   ),
                 ),

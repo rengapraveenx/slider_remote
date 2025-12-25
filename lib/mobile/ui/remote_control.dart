@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -14,7 +15,7 @@ class _RemoteControlState extends State<RemoteControl> {
   final TextEditingController _ipController = TextEditingController();
   WebSocketChannel? _channel;
   bool _isConnected = false;
-  String _statusMessage = "Enter Host IP";
+  String _statusMessage = "Enter Host IP or Scan QR";
 
   @override
   void initState() {
@@ -32,7 +33,10 @@ class _RemoteControlState extends State<RemoteControl> {
   void _connect() {
     final ip = _ipController.text.trim();
     if (ip.isEmpty) return;
+    _connectToIp(ip);
+  }
 
+  void _connectToIp(String ip) {
     try {
       final wsUrl = Uri.parse('ws://$ip:8080');
       setState(() {
@@ -53,10 +57,12 @@ class _RemoteControlState extends State<RemoteControl> {
           });
         },
         onDone: () {
-          setState(() {
-            _isConnected = false;
-            _statusMessage = "Disconnected";
-          });
+          if (mounted) {
+            setState(() {
+              _isConnected = false;
+              _statusMessage = "Disconnected";
+            });
+          }
         },
       );
 
@@ -64,10 +70,22 @@ class _RemoteControlState extends State<RemoteControl> {
         _isConnected = true;
         _statusMessage = "Connected to $ip";
       });
+      // Save IP for convenience? (Optional)
     } catch (e) {
       setState(() {
         _statusMessage = "Error: $e";
       });
+    }
+  }
+
+  Future<void> _scanQr() async {
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (context) => const QrScanScreen()),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      _ipController.text = result;
+      _connectToIp(result);
     }
   }
 
@@ -109,11 +127,21 @@ class _RemoteControlState extends State<RemoteControl> {
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 24),
-              FilledButton(
+              FilledButton.icon(
                 onPressed: _connect,
-                child: const Padding(
+                icon: const Icon(Icons.link),
+                label: const Padding(
                   padding: EdgeInsets.all(16.0),
                   child: Text('Connect'),
+                ),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: _scanQr,
+                icon: const Icon(Icons.qr_code_scanner),
+                label: const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text('Scan QR Code'),
                 ),
               ),
             ],
@@ -127,9 +155,8 @@ class _RemoteControlState extends State<RemoteControl> {
       body: GestureDetector(
         onHorizontalDragEnd: (details) {
           if (details.primaryVelocity! > 0) {
-            // Swipe Right -> Previous (Logical? Left is prev usually, but user said Swipe Right = Previous)
-            // Wait, previous plan: "Swipe Left -> Next, Swipe Right -> Previous"
-            _sendCommand("previous");
+            // Swipe Right -> Previous
+            _sendCommand("prev");
             _showFeedback(context, "Previous");
           } else if (details.primaryVelocity! < 0) {
             // Swipe Left -> Next
@@ -154,7 +181,9 @@ class _RemoteControlState extends State<RemoteControl> {
                     Text(
                       "Swipe Left for NEXT\nSwipe Right for PREV",
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white.withOpacity(0.5)),
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                      ),
                     ),
                   ],
                 ),
@@ -192,6 +221,28 @@ class _RemoteControlState extends State<RemoteControl> {
         duration: const Duration(milliseconds: 300),
         behavior: SnackBarBehavior.floating,
         width: 100,
+      ),
+    );
+  }
+}
+
+class QrScanScreen extends StatelessWidget {
+  const QrScanScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Scan QR Code')),
+      body: MobileScanner(
+        onDetect: (capture) {
+          final List<Barcode> barcodes = capture.barcodes;
+          for (final barcode in barcodes) {
+            if (barcode.rawValue != null) {
+              Navigator.pop(context, barcode.rawValue);
+              break; // Return the first valid code
+            }
+          }
+        },
       ),
     );
   }
