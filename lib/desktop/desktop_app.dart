@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'server/server.dart';
 import 'ui/dashboard.dart';
 
 class DesktopApp extends StatelessWidget {
@@ -8,11 +9,13 @@ class DesktopApp extends StatelessWidget {
     required this.onToggleTheme,
     required this.isDarkMode,
     required this.themeMode,
+    this.server,
   });
 
   final VoidCallback onToggleTheme;
   final bool isDarkMode;
   final ThemeMode themeMode;
+  final SlideServer? server;
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +36,11 @@ class DesktopApp extends StatelessWidget {
         useMaterial3: true,
         brightness: Brightness.dark,
       ),
-      home: Dashboard(onToggleTheme: onToggleTheme, isDarkMode: isDarkMode),
+      home: Dashboard(
+        onToggleTheme: onToggleTheme,
+        isDarkMode: isDarkMode,
+        server: server,
+      ),
     );
   }
 }

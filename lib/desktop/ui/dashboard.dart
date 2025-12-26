@@ -14,17 +14,19 @@ class Dashboard extends StatefulWidget {
     super.key,
     required this.onToggleTheme,
     required this.isDarkMode,
+    this.server,
   });
 
   final VoidCallback onToggleTheme;
   final bool isDarkMode;
+  final SlideServer? server;
 
   @override
   State<Dashboard> createState() => _DashboardState();
 }
 
 class _DashboardState extends State<Dashboard> {
-  final _server = SlideServer();
+  late final SlideServer _server;
   String? _serverIp;
   int _clientCount = 0;
 
@@ -38,6 +40,7 @@ class _DashboardState extends State<Dashboard> {
   @override
   void initState() {
     super.initState();
+    _server = widget.server ?? SlideServer();
     _initServer();
   }
 
